@@ -121,9 +121,12 @@ int main( int argc, char** argv )
   }
 
   experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, float, uint32_t, float, bool> exp( "xag_minmc", "benchmark", "num_and", "num_xor", "num_and_opt", "num_xor_opt", "improvement %", "iterations", "avg. runtime [s]", "equivalent" );
-
+  int sig = 0;
   for ( auto const& benchmark : crypto_benchmarks() )
   {
+    if (sig==3)
+      break;
+    sig++;
     fmt::print( "[i] processing {}\n", benchmark );
 
     uint32_t num_and = 0u, num_xor = 0u; 
@@ -189,7 +192,7 @@ int main( int argc, char** argv )
       num_and_aft = 0u;
       num_xor_aft = 0u;
 
-      cut_rewriting( xag, resyn, ps, nullptr, ::detail::mc_cost<xag_network>() );
+      xag = cut_rewriting( xag, resyn, ps, nullptr);
       xag = cleanup_dangling( xag );
       refactoring( xag, resyn2, ps2, nullptr, ::detail::free_xor_cost<xag_network>() );
       xag = cleanup_dangling( xag );

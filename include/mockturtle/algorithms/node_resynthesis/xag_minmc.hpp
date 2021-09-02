@@ -223,9 +223,9 @@ public:
   }
 
   template<typename LeavesIterator, typename Fn>
-  void operator()( xag_network& xag, kitty::dynamic_truth_table const& function, LeavesIterator begin, LeavesIterator end, Fn&& fn )
+  void operator()( xag_network& xag, kitty::dynamic_truth_table const& function, LeavesIterator begin, LeavesIterator end, Fn&& fn ) const
   {
-    stopwatch t1( st.time_total );
+    //stopwatch t1( st.time_total );
 
     const auto func_ext = kitty::extend_to<6u>( function );
     std::vector<kitty::detail::spectral_operation> trans;
@@ -235,7 +235,7 @@ public:
 
     if ( cache_it != classify_cache->end() )
     {
-      st.cache_hits++;
+      //st.cache_hits++;
       if ( !std::get<0>( cache_it->second ) )
       {
         return; /* quit */
@@ -255,7 +255,7 @@ public:
       classify_cache->insert( {func_ext, {spectral.second, spectral.first, trans}} );
       if ( !spectral.second )
       {
-        st.classify_aborts++;
+        //st.classify_aborts++;
         return; /* quit */
       }
       tt_ext = spectral.first;
@@ -458,7 +458,7 @@ private:
 
 public:
   xag_minmc_resynthesis_params ps;
-  xag_minmc_resynthesis_stats st;
+  mutable xag_minmc_resynthesis_stats st;
 
 private:
   xag_minmc_resynthesis_stats *pst{nullptr};
