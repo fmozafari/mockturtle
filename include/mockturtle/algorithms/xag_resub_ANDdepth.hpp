@@ -180,7 +180,7 @@ private:
     }*/
 
     //fereshte
-    counter_and = ntk.level(n);
+    counter_and = ntk.level(n); // modify to consider only AND gates??
     //std::cout<<"deref - node: "<<n<<"  level: "<<counter_and<<std::endl;
     if ( ntk.is_xor( n ) )
     {
@@ -621,6 +621,7 @@ public:
     for ( auto i = 0u; i < num_divs; ++i )
     {
       auto const d = divs.at( i );
+      std::cout<<"u divs: "<<d<<std::endl;
 
       if ( ntk.level( d ) > required - 1 )
         continue;
@@ -982,13 +983,15 @@ void resubstitution_with_ANDdepth( Ntk& ntk, resubstitution_params const& ps = {
   static_assert( has_value_v<Ntk>, "Ntk does not implement the has_value method" );
   static_assert( has_visited_v<Ntk>, "Ntk does not implement the has_visited method" );
 
-  using resub_view_t = fanout_view<depth_view<Ntk>>;
-  depth_view<Ntk> depth_view{ ntk };
-  resub_view_t resub_view{ depth_view };
+  using resub_view_t = depth_view<fanout_view<xag_network>, mc_cost<xag_network>>;
+  fanout_view<xag_network> fanout_view{ ntk };
+  resub_view_t resub_view{ fanout_view };
+
+  std::cout<<"my depth: "<<resub_view.depth()<<std::endl;
 
   using truthtable_t = kitty::dynamic_truth_table;
   using mffc_result_t = std::pair<uint32_t, uint32_t>;
-  using resub_impl_t = detail::resubstitution_impl<resub_view_t, typename detail::window_based_resub_engine<resub_view_t, truthtable_t, truthtable_t, xag_resub_functor_ANDdepth<resub_view_t, typename detail::window_simulator<resub_view_t, truthtable_t>, truthtable_t>, mffc_result_t>, typename detail::default_divisor_collector<Ntk, typename detail::node_mffc_inside_xag_ANDdepth<Ntk>, mffc_result_t>>;
+  using resub_impl_t = detail::resubstitution_impl<resub_view_t, typename detail::window_based_resub_engine<resub_view_t, truthtable_t, truthtable_t, xag_resub_functor_ANDdepth<resub_view_t, typename detail::window_simulator<resub_view_t, truthtable_t>, truthtable_t>, mffc_result_t>, typename detail::default_divisor_collector<resub_view_t, typename detail::node_mffc_inside_xag_ANDdepth<resub_view_t>, mffc_result_t>>;
 
   resubstitution_stats st;
   typename resub_impl_t::engine_st_t engine_st;
