@@ -339,12 +339,13 @@ public:
     uint32_t num_and_mffc = num_mffc.first;
     uint32_t num_xor_mffc = num_mffc.second;
     /* consider constants */
+
     auto g = call_with_stopwatch( st.time_resubC, [&]()
                                   { return resub_const( root, care, required ); } );
     if ( g )
     {
       ++st.num_const_accepts;
-      last_gain = num_and_mffc;
+      last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
       return g; /* accepted resub */
     }
 
@@ -354,7 +355,7 @@ public:
     if ( g )
     {
       ++st.num_div0_accepts;
-      last_gain = num_and_mffc;
+      last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
       return g; /* accepted resub */
     }
 
@@ -386,25 +387,25 @@ public:
         return g; /* accepted resub */
       }
     }
+
     else
     {
-
       g = call_with_stopwatch( st.time_resub1, [&]()
-                               { return resub_div1( root, care, required ); } );
+                               { return resub_div1( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div1_accepts;
-        last_gain = num_and_mffc;
+        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
         return g; /* accepted resub */
       }
 
       /* consider two nodes */
       g = call_with_stopwatch( st.time_resub2, [&]()
-                               { return resub_div2( root, care, required ); } );
+                               { return resub_div2( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div2_accepts;
-        last_gain = num_and_mffc;
+        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
         return g; /*  accepted resub */
       }
 
@@ -420,7 +421,7 @@ public:
       if ( g )
       {
         ++st.num_div1_and_accepts;
-        last_gain = num_and_mffc - 1;
+        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 1; //num_and_mffc - 1; //fereshte
         return g; /*  accepted resub */
       }
       if ( num_and_mffc < 3 ) /* it is worth trying also AND-12 resub here */
@@ -432,7 +433,7 @@ public:
       if ( g )
       {
         ++st.num_div12_accepts;
-        last_gain = num_and_mffc - 2;
+        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2; //num_and_mffc - 2; //fereshte
         return g; /* accepted resub */
       }
 
@@ -446,7 +447,7 @@ public:
       if ( g )
       {
         ++st.num_div2_and_accepts;
-        last_gain = num_and_mffc - 2;
+        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2; //num_and_mffc - 2; //fereshte
         return g; /* accepted resub */
       }
     }
@@ -621,7 +622,6 @@ public:
     for ( auto i = 0u; i < num_divs; ++i )
     {
       auto const d = divs.at( i );
-      std::cout<<"u divs: "<<d<<std::endl;
 
       if ( ntk.level( d ) > required - 1 )
         continue;
@@ -987,7 +987,7 @@ void resubstitution_with_ANDdepth( Ntk& ntk, resubstitution_params const& ps = {
   fanout_view<xag_network> fanout_view{ ntk };
   resub_view_t resub_view{ fanout_view };
 
-  std::cout<<"my depth: "<<resub_view.depth()<<std::endl;
+  //std::cout<<"my depth: "<<resub_view.depth()<<std::endl;
 
   using truthtable_t = kitty::dynamic_truth_table;
   using mffc_result_t = std::pair<uint32_t, uint32_t>;
