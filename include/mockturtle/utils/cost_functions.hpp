@@ -109,6 +109,69 @@ struct mc_cost
   }
 };
 
+template<class Ntk>
+struct AND_wo_mffc_cost
+{
+  uint32_t operator()( Ntk const& ntk, node<Ntk> const& node ) const
+  {
+    if(ntk.value(node))
+    {
+      return 0u;
+    }
+    if constexpr ( has_is_xor_v<Ntk> )
+    {
+      if ( ntk.is_xor( node ) )
+      {
+        return 0u;
+      }
+    }
+
+    if constexpr ( has_is_xor3_v<Ntk> )
+    {
+      if ( ntk.is_xor3( node ) )
+      {
+        return 0u;
+      }
+    }
+
+    if constexpr ( has_is_nary_and_v<Ntk> )
+    {
+      if ( ntk.is_nary_and( node ) )
+      {
+        if ( ntk.fanin_size( node ) > 1u )
+        {
+          return ntk.fanin_size( node ) - 1u;
+        }
+        return 0u;
+      }
+    }
+
+    if constexpr ( has_is_nary_or_v<Ntk> )
+    {
+      if ( ntk.is_nary_or( node ) )
+      {
+        if ( ntk.fanin_size( node ) > 1u )
+        {
+          return ntk.fanin_size( node ) - 1u;
+        }
+        return 0u;
+      }
+    }
+
+    if constexpr ( has_is_nary_xor_v<Ntk> )
+    {
+      if ( ntk.is_nary_xor( node ) )
+      {
+        return 0u;
+      }
+    }
+
+    // TODO (Does not take into account general node functions)
+    return 1u;
+  }
+};
+
+
 template<class Ntk, class NodeCostFn = unit_cost<Ntk>>
 uint32_t costs( Ntk const& ntk )
 {
