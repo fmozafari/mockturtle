@@ -134,23 +134,16 @@ public:
 
   std::pair<int32_t, int32_t> run( node const& n, std::vector<node> const& leaves, std::vector<node>& inside )
   {
-    //std::cout<<"\n explicit node_mffc_inside_xag_ANDdepth run -- node: "<<n<<std::endl;
     /* increment the fanout counters for the leaves */
     for ( const auto& l : leaves )
       ntk.incr_fanout_size( l );
-
-    /* dereference the node */
-    auto count1 = node_deref_rec( n );
-
+    std::cout<<"before mffc cone - node: "<<n<<std::endl;
     /* collect the nodes inside the MFFC */
     node_mffc_cone( n, inside );
-
-    /* reference it back */
-    auto count2 = node_ref_rec( n );
-    (void)count2;
-
-    assert( count1.first == count2.first );
-    assert( count1.second == count2.second );
+    std::cout<<"after mffc cone\n";
+    auto count1 = compute_potential_gain(n, inside);
+    std::cout<<"after compute potential gain - AND depth: "<<count1.first<<std::endl;
+    //count1.first = ntk.level(n) - count1.first;
 
     for ( const auto& l : leaves )
       ntk.decr_fanout_size( l );
@@ -159,97 +152,62 @@ public:
   }
 
 private:
-  /* ! \brief Dereference the node's MFFC */
-  std::pair<int32_t, int32_t> node_deref_rec( node const& n )
+  
+  /* computing potential gain: removing MFFC and then compute AND level */
+  std::pair<int32_t, int32_t> compute_potential_gain(node const& n, std::vector<node>& mffc)
   {
+    auto counter_and_depth = ntk.level(n) - compute_AND_depth(n, mffc);
+    auto counter_xor_num = compute_xor_count(n);
 
-    //std::cout<<"node deref rec func -- node: "<<n<<std::endl;
+    return { counter_and_depth, counter_xor_num };
+  }
+
+  /* compute xor num in MFFC */
+  int32_t compute_xor_count( node const& n ) 
+  {
     if ( ntk.is_pi( n ) )
-      return { 0, 0 };
+      return 0;
 
-    int32_t counter_and = 0;
     int32_t counter_xor = 0;
 
-    /*if ( ntk.is_and( n ) )
-    {
-      counter_and = 1 ;
-    }
-    else if ( ntk.is_xor( n ) )
-    {
-      counter_xor = 1;
-    }*/
-
-    //fereshte
-    counter_and = ntk.level(n); // modify to consider only AND gates??
-    //std::cout<<"deref - node: "<<n<<"  level: "<<counter_and<<std::endl;
     if ( ntk.is_xor( n ) )
     {
       counter_xor = 1;
     }
-
 
     ntk.foreach_fanin( n, [&]( const auto& f )
                        {
                          auto const& p = ntk.get_node( f );
 
                          ntk.decr_fanout_size( p );
-                         //std::cout<<"for each fanin - node: "<<p<<"  fanout size: "<<ntk.fanout_size( p )<<std::endl;
                          if ( ntk.fanout_size( p ) == 0 )
                          {
-                           //std::cout<<"deref - node: "<<p<<std::endl;
-                           auto counter = node_deref_rec( p );
-                           
-                           //counter_and += counter.first;
-                           counter_xor += counter.second;
-                           //std::cout<<"deref - #and: "<<counter_and<<std::endl;
+                           auto counter = compute_xor_count( p );
+                           counter_xor += counter;
                          }
                        } );
-
-    //std::cout<<"counter and: "<<counter_and<<std::endl;
-    return { counter_and, counter_xor };
+    return counter_xor;
   }
 
-  /* ! \brief Reference the node's MFFC */
-  std::pair<int32_t, int32_t> node_ref_rec( node const& n )
+  /* compute depth without MFFC */
+  int32_t compute_AND_depth( node const& n, std::vector<node>& mffc ) 
   {
-    if ( ntk.is_pi( n ) )
-      return { 0, 0 };
 
-    int32_t counter_and = 0;
-    int32_t counter_xor = 0;
-
-    /*if ( ntk.is_and( n ) )
+    /* mark nodes in the MFFC */
+    for ( const auto& t : mffc )
     {
-      counter_and = 1;
+      ntk.set_value( t, 1 );
     }
-    else if ( ntk.is_xor( n ) )
+
+    auto AND_depth = ntk.level(n);
+
+    /* unmark the current MFFC */
+    for ( const auto& t : mffc )
     {
-      counter_xor = 1;
-    }*/
+      ntk.set_value( t, 0 );
+    }
 
-    //fereshte
-    counter_and = ntk.level(n);
-    //std::cout<<"ref - node: "<<n<<"  level: "<<counter_and<<std::endl;
-    if ( ntk.is_xor( n ) )
-    {
-      counter_xor = 1;
-    } 
-
-    ntk.foreach_fanin( n, [&]( const auto& f )
-                       {
-                         auto const& p = ntk.get_node( f );
-
-                         auto v = ntk.fanout_size( p );
-                         ntk.incr_fanout_size( p );
-                         if ( v == 0 )
-                         {
-                           auto counter = node_ref_rec( p );
-                           //counter_and += counter.first;
-                           counter_xor += counter.second;
-                         }
-                       } );
-
-    return { counter_and, counter_xor };
+    return AND_depth;
   }
 
   void node_mffc_cone_rec( node const& n, std::vector<node>& cone, bool top_most )
@@ -346,7 +304,7 @@ public:
     {
       ++st.num_const_accepts;
       last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
-      return g; /* accepted resub */
+      return (last_gain>0) ? g : std::nullopt; /* accepted resub */
     }
 
     /* consider equal nodes */
@@ -356,10 +314,10 @@ public:
     {
       ++st.num_div0_accepts;
       last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
-      return g; /* accepted resub */
+      return (last_gain>0) ? g : std::nullopt; /* accepted resub */
     }
 
-    if ( num_and_mffc == 0 )
+    if ( ntk.level(root) == 0 )
     {
       return std::nullopt;
       if ( max_inserts == 0 || num_xor_mffc == 1 )
@@ -396,7 +354,7 @@ public:
       {
         ++st.num_div1_accepts;
         last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
-        return g; /* accepted resub */
+        return (last_gain>0) ? g : std::nullopt; /* accepted resub */
       }
 
       /* consider two nodes */
@@ -406,7 +364,7 @@ public:
       {
         ++st.num_div2_accepts;
         last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
-        return g; /*  accepted resub */
+        return (last_gain>0) ? g : std::nullopt; /*  accepted resub */
       }
 
       if ( num_and_mffc < 2 ) /* it is worth trying also AND resub here */
@@ -422,7 +380,7 @@ public:
       {
         ++st.num_div1_and_accepts;
         last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 1; //num_and_mffc - 1; //fereshte
-        return g; /*  accepted resub */
+        return (last_gain>0) ? g : std::nullopt; /*  accepted resub */
       }
       if ( num_and_mffc < 3 ) /* it is worth trying also AND-12 resub here */
         return std::nullopt;
@@ -434,7 +392,7 @@ public:
       {
         ++st.num_div12_accepts;
         last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2; //num_and_mffc - 2; //fereshte
-        return g; /* accepted resub */
+        return (last_gain>0) ? g : std::nullopt; /* accepted resub */
       }
 
       /* collect level two divisors */
@@ -448,7 +406,7 @@ public:
       {
         ++st.num_div2_and_accepts;
         last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2; //num_and_mffc - 2; //fereshte
-        return g; /* accepted resub */
+        return (last_gain>0) ? g : std::nullopt; /* accepted resub */
       }
     }
     return std::nullopt;
@@ -983,7 +941,7 @@ void resubstitution_with_ANDdepth( Ntk& ntk, resubstitution_params const& ps = {
   static_assert( has_value_v<Ntk>, "Ntk does not implement the has_value method" );
   static_assert( has_visited_v<Ntk>, "Ntk does not implement the has_visited method" );
 
-  using resub_view_t = depth_view<fanout_view<xag_network>, mc_cost<xag_network>>;
+  using resub_view_t = depth_view<fanout_view<xag_network>, AND_wo_mffc_cost<xag_network>>;
   fanout_view<xag_network> fanout_view{ ntk };
   resub_view_t resub_view{ fanout_view };
 
