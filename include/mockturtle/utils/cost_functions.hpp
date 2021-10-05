@@ -29,6 +29,7 @@
 
   \author Heinz Riener
   \author Mathias Soeken
+  \author Fereshte Mozafari
 */
 
 #pragma once
@@ -110,7 +111,7 @@ struct mc_cost
 };
 
 template<class Ntk>
-struct AND_wo_mffc_cost
+struct AND_wo_mffc_cost /* Considering the AND gates without MFFC */ 
 {
   uint32_t operator()( Ntk const& ntk, node<Ntk> const& node ) const
   {
@@ -118,6 +119,7 @@ struct AND_wo_mffc_cost
     {
       return 0u;
     }
+
     if constexpr ( has_is_xor_v<Ntk> )
     {
       if ( ntk.is_xor( node ) )

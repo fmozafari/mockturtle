@@ -137,12 +137,12 @@ public:
     /* increment the fanout counters for the leaves */
     for ( const auto& l : leaves )
       ntk.incr_fanout_size( l );
-    std::cout<<"before mffc cone - node: "<<n<<std::endl;
+    
     /* collect the nodes inside the MFFC */
     node_mffc_cone( n, inside );
-    std::cout<<"after mffc cone\n";
+    
     auto count1 = compute_potential_gain(n, inside);
-    std::cout<<"after compute potential gain - AND depth: "<<count1.first<<std::endl;
+    
     //count1.first = ntk.level(n) - count1.first;
 
     for ( const auto& l : leaves )
@@ -158,7 +158,8 @@ private:
   {
     auto counter_and_depth = ntk.level(n) - compute_AND_depth(n, mffc);
     auto counter_xor_num = compute_xor_count(n);
-
+    if(counter_and_depth<0)
+    std::cout<<"potential gain: "<<counter_and_depth<<std::endl;
     return { counter_and_depth, counter_xor_num };
   }
 
@@ -293,27 +294,26 @@ public:
 
   std::optional<signal> operator()( node const& root, TT care, uint32_t required, uint32_t max_inserts, std::pair<uint32_t, uint32_t> num_mffc, uint32_t& last_gain )
   {
-
     uint32_t num_and_mffc = num_mffc.first;
     uint32_t num_xor_mffc = num_mffc.second;
     /* consider constants */
-
     auto g = call_with_stopwatch( st.time_resubC, [&]()
-                                  { return resub_const( root, care, required ); } );
+                                  { return resub_const( root, care, required ); } ); 
+    
     if ( g )
     {
       ++st.num_const_accepts;
-      last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
+      last_gain = ( ntk.level(root) > ntk.level(ntk.get_node(g.value())) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) : 0; 
       return (last_gain>0) ? g : std::nullopt; /* accepted resub */
     }
 
     /* consider equal nodes */
     g = call_with_stopwatch( st.time_resub0, [&]()
-                             { return resub_div0( root, care, required ); } );
+                             { return resub_div0( root, care, required ); } ); 
     if ( g )
     {
       ++st.num_div0_accepts;
-      last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
+      last_gain = ( ntk.level(root) > ntk.level(ntk.get_node(g.value())) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) : 0; 
       return (last_gain>0) ? g : std::nullopt; /* accepted resub */
     }
 
@@ -324,7 +324,7 @@ public:
         return std::nullopt;
 
       g = call_with_stopwatch( st.time_resub1, [&]()
-                               { return resub_div1( root, care, required ); } );
+                               { return resub_div1( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div1_accepts;
@@ -337,7 +337,7 @@ public:
 
       /* consider two nodes */
       g = call_with_stopwatch( st.time_resub2, [&]()
-                               { return resub_div2( root, care, required ); } );
+                               { return resub_div2( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div2_accepts;
@@ -353,33 +353,31 @@ public:
       if ( g )
       {
         ++st.num_div1_accepts;
-        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
+        last_gain = ( ntk.level(root) > ntk.level(ntk.get_node(g.value())) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) : 0; 
         return (last_gain>0) ? g : std::nullopt; /* accepted resub */
       }
 
       /* consider two nodes */
       g = call_with_stopwatch( st.time_resub2, [&]()
-                               { return resub_div2( root, care, required ); } ); 
+                               { return resub_div2( root, care, required ); } );  
       if ( g )
       {
         ++st.num_div2_accepts;
-        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())); //num_and_mffc; //fereshte
+        last_gain = ( ntk.level(root) > ntk.level(ntk.get_node(g.value())) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) : 0; 
         return (last_gain>0) ? g : std::nullopt; /*  accepted resub */
       }
 
       if ( num_and_mffc < 2 ) /* it is worth trying also AND resub here */
         return std::nullopt;
-
       /* collect level one divisors */
       call_with_stopwatch( st.time_collect_unate_divisors, [&]()
                            { collect_unate_divisors( root, required ); } );
-
       g = call_with_stopwatch( st.time_resub1_and, [&]()
-                               { return resub_div1_and( root, care, required ); } );
+                               { return resub_div1_and( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div1_and_accepts;
-        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 1; //num_and_mffc - 1; //fereshte
+        last_gain = ( ntk.level(root) > (ntk.level(ntk.get_node(g.value()))-1) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 1 : 0; 
         return (last_gain>0) ? g : std::nullopt; /*  accepted resub */
       }
       if ( num_and_mffc < 3 ) /* it is worth trying also AND-12 resub here */
@@ -387,11 +385,11 @@ public:
 
       /* consider triples */
       g = call_with_stopwatch( st.time_resub12, [&]()
-                               { return resub_div12( root, care, required ); } );
+                               { return resub_div12( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div12_accepts;
-        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2; //num_and_mffc - 2; //fereshte
+        last_gain = ( ntk.level(root) > (ntk.level(ntk.get_node(g.value()))-2) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2 : 0; 
         return (last_gain>0) ? g : std::nullopt; /* accepted resub */
       }
 
@@ -401,11 +399,11 @@ public:
 
       /* consider two nodes */
       g = call_with_stopwatch( st.time_resub2_and, [&]()
-                               { return resub_div2_and( root, care, required ); } );
+                               { return resub_div2_and( root, care, required ); } ); 
       if ( g )
       {
         ++st.num_div2_and_accepts;
-        last_gain = ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2; //num_and_mffc - 2; //fereshte
+        last_gain = ( ntk.level(root) > (ntk.level(ntk.get_node(g.value()))-2) ) ? ntk.level(root) - ntk.level(ntk.get_node(g.value())) - 2 : 0; 
         return (last_gain>0) ? g : std::nullopt; /* accepted resub */
       }
     }
