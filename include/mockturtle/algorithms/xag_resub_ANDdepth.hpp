@@ -127,7 +127,7 @@ public:
   using node = typename Ntk::node;
 
 public:
-  explicit node_mffc_inside_xag_ANDdepth( Ntk const& ntk )
+  explicit node_mffc_inside_xag_ANDdepth( Ntk & ntk )
       : ntk( ntk )
   {
   }
@@ -137,60 +137,37 @@ public:
     /* increment the fanout counters for the leaves */
     for ( const auto& l : leaves )
       ntk.incr_fanout_size( l );
-    
+
+    /* dereference the node */
+    auto count_xor1 = node_deref_rec( n );
+
     /* collect the nodes inside the MFFC */
     node_mffc_cone( n, inside );
-    
-    auto count1 = compute_potential_gain(n, inside);
-    
-    //count1.first = ntk.level(n) - count1.first;
+
+    /* reference it back */
+    auto count_xor2 = node_ref_rec( n );
+    (void)count_xor2;
+
+    assert( count1 == count2 );
+    auto AND_depth = compute_potential_ANDdepth_gain(n, inside);
 
     for ( const auto& l : leaves )
       ntk.decr_fanout_size( l );
 
-    return count1;
+    return {AND_depth, count_xor1};
   }
 
 private:
   
   /* computing potential gain: removing MFFC and then compute AND level */
-  std::pair<int32_t, int32_t> compute_potential_gain(node const& n, std::vector<node>& mffc)
+  int32_t compute_potential_ANDdepth_gain(node const& n, std::vector<node>& mffc)
   {
+    ntk.update_levels();
     auto counter_and_depth = ntk.level(n) - compute_AND_depth(n, mffc);
-    auto counter_xor_num = compute_xor_count(n);
-    if(counter_and_depth<0)
-    std::cout<<"potential gain: "<<counter_and_depth<<std::endl;
-    return { counter_and_depth, counter_xor_num };
+    return counter_and_depth;
   }
 
-  /* compute xor num in MFFC */
-  int32_t compute_xor_count( node const& n ) 
-  {
-    if ( ntk.is_pi( n ) )
-      return 0;
-
-    int32_t counter_xor = 0;
-
-    if ( ntk.is_xor( n ) )
-    {
-      counter_xor = 1;
-    }
-
-    ntk.foreach_fanin( n, [&]( const auto& f )
-                       {
-                         auto const& p = ntk.get_node( f );
-
-                         ntk.decr_fanout_size( p );
-                         if ( ntk.fanout_size( p ) == 0 )
-                         {
-                           auto counter = compute_xor_count( p );
-                           counter_xor += counter;
-                         }
-                       } );
-    return counter_xor;
-  }
-
-  /* compute depth without MFFC */
+  /* compute AND depth without MFFC */
   int32_t compute_AND_depth( node const& n, std::vector<node>& mffc ) 
   {
 
@@ -211,9 +188,66 @@ private:
     return AND_depth;
   }
 
+  /* ! \brief Dereference the node's MFFC + compute the number of XOR */
+  int32_t node_deref_rec( node const& n )
+  {
+
+    if ( ntk.is_pi( n ) )
+      return 0;
+
+    int32_t counter_xor = 0;
+
+    if ( ntk.is_xor( n ) )
+    {
+      counter_xor = 1;
+    }
+
+    ntk.foreach_fanin( n, [&]( const auto& f )
+                       {
+                         auto const& p = ntk.get_node( f );
+
+                         ntk.decr_fanout_size( p );
+                         if ( ntk.fanout_size( p ) == 0 )
+                         {
+                           auto counter = node_deref_rec( p );
+                           counter_xor += counter;
+                         }
+                       } );
+
+    return counter_xor;
+  }
+
+  /* ! \brief Reference the node's MFFC + compute the number of XOR */
+  int32_t node_ref_rec( node const& n )
+  {
+    if ( ntk.is_pi( n ) )
+      return 0;
+
+    int32_t counter_xor = 0;
+
+    if ( ntk.is_xor( n ) )
+    {
+      counter_xor = 1;
+    }
+
+    ntk.foreach_fanin( n, [&]( const auto& f )
+                       {
+                         auto const& p = ntk.get_node( f );
+
+                         auto v = ntk.fanout_size( p );
+                         ntk.incr_fanout_size( p );
+                         if ( v == 0 )
+                         {
+                           auto counter = node_ref_rec( p );
+                           counter_xor += counter;
+                         }
+                       } );
+
+    return counter_xor;
+  }
+
   void node_mffc_cone_rec( node const& n, std::vector<node>& cone, bool top_most )
   {
-    //std::cout<<"mffc cone: "<<n<<"  fanout size: "<<ntk.fanout_size( n )<<std::endl;
     /* skip visited nodes */
     if ( ntk.visited( n ) == ntk.trav_id() )
       return;
@@ -228,7 +262,6 @@ private:
 
     /* collect the internal nodes */
     cone.emplace_back( n );
-    //std::cout<<"cone back: "<<n<<std::endl;
   }
 
   void node_mffc_cone( node const& n, std::vector<node>& cone )
@@ -239,7 +272,7 @@ private:
   }
 
 private:
-  Ntk const& ntk;
+  Ntk & ntk;
 };
 
 } /* namespace detail */
@@ -939,11 +972,10 @@ void resubstitution_with_ANDdepth( Ntk& ntk, resubstitution_params const& ps = {
   static_assert( has_value_v<Ntk>, "Ntk does not implement the has_value method" );
   static_assert( has_visited_v<Ntk>, "Ntk does not implement the has_visited method" );
 
-  using resub_view_t = depth_view<fanout_view<xag_network>, AND_wo_mffc_cost<xag_network>>;
+  /* The cost function is important to consider only AND gates + not MFFC*/
+  using resub_view_t = depth_view<fanout_view<xag_network>, AND_wo_mffc_cost<xag_network>>; 
   fanout_view<xag_network> fanout_view{ ntk };
   resub_view_t resub_view{ fanout_view };
-
-  //std::cout<<"my depth: "<<resub_view.depth()<<std::endl;
 
   using truthtable_t = kitty::dynamic_truth_table;
   using mffc_result_t = std::pair<uint32_t, uint32_t>;

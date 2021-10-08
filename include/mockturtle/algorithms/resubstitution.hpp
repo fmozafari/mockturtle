@@ -240,7 +240,7 @@ public:
   using cut_comp_statistics_type = typename cut_comp::statistics_type;
 
 public:
-  explicit default_divisor_collector( Ntk const& ntk, resubstitution_params const& ps, stats& st )
+  explicit default_divisor_collector( Ntk & ntk, resubstitution_params const& ps, stats& st )
     : ntk( ntk ), ps( ps ), st( st ), cuts( ntk, cut_comp_parameters_type{ps.max_pis}, cuts_st )
   {
   }
@@ -418,7 +418,7 @@ private:
   }
 
 private:
-  Ntk const& ntk;
+  Ntk & ntk;
   resubstitution_params ps;
   stats& st;
 
